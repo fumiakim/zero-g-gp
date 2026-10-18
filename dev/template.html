@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#05061a">
+<title>ZERO-G GP</title>
+<style>
+  :root { --bg: #05061a; --ink: #e8ecff; --accent: #ffd23a; --line: #3a4a8a; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  #wrap { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; }
+  #game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
+    box-shadow: 0 0 0 1px #1a2050, 0 0 40px rgba(60, 80, 200, .25); }
+  #helpBtn { position: fixed; right: calc(10px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top)); width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(10, 14, 40, .7); color: var(--accent); font: bold 15px/1 system-ui, sans-serif;
+    cursor: pointer; z-index: 5; opacity: .7; }
+  #helpBtn:hover { opacity: 1; }
+  #help { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: rgba(2, 3, 14, .78); padding: 16px; box-sizing: border-box; }
+  #help[hidden] { display: none; }
+  #help .card { max-width: 640px; width: 100%; max-height: 100%; overflow: auto; background: #0b0f2e; border: 1px solid var(--line);
+    border-top: 3px solid var(--accent); border-radius: 6px; padding: 18px 22px; box-sizing: border-box; line-height: 1.6; font-size: 14px; }
+  #help h2 { margin: 0 0 6px; font-size: 20px; color: var(--accent); letter-spacing: .04em; }
+  #help h3 { margin: 14px 0 4px; font-size: 15px; color: #7fe0ff; }
+  #help table { border-collapse: collapse; width: 100%; }
+  #help td { padding: 2px 8px 2px 0; vertical-align: top; }
+  #help td:first-child { white-space: nowrap; color: #ffd23a; }
+  #help ul { margin: 4px 0; padding-left: 20px; }
+  #help .close { margin-top: 12px; padding: 6px 18px; background: var(--accent); color: #101030; border: 0; border-radius: 4px;
+    font-weight: bold; cursor: pointer; }
+  kbd { display: inline-block; padding: 0 5px; border: 1px solid #4a5a9a; border-bottom-width: 2px; border-radius: 3px;
+    font: 12px/1.5 ui-monospace, Menlo, monospace; color: #fff; background: #151a40; }
+  #touch { position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 4; }
+  #touch[hidden] { display: none; }
+  .tbtn { position: fixed; pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35);
+    background: rgba(20, 30, 80, .35); color: rgba(255, 255, 255, .85); font: bold 18px/1 system-ui, sans-serif; touch-action: none; }
+  .tbtn.on { background: rgba(255, 210, 58, .45); }
+  :root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --sb: env(safe-area-inset-bottom, 0px); --st: env(safe-area-inset-top, 0px); }
+  #tl { left: calc(10px + var(--sl)); bottom: calc(72px + var(--sb)); }
+  #tr { left: calc(122px + var(--sl)); bottom: calc(72px + var(--sb)); }
+  #tu { left: calc(72px + var(--sl)); bottom: calc(132px + var(--sb)); width: 44px; height: 44px; font-size: 13px; }
+  #td { left: calc(72px + var(--sl)); bottom: calc(24px + var(--sb)); width: 44px; height: 44px; font-size: 13px; }
+  #ta { right: calc(18px + var(--sr)); bottom: calc(40px + var(--sb)); width: 76px; height: 76px; }
+  #tb { right: calc(104px + var(--sr)); bottom: calc(20px + var(--sb)); }
+  #tc { right: calc(64px + var(--sr)); bottom: calc(126px + var(--sb)); width: 72px; height: 46px; border-radius: 23px; font-size: 13px; }
+  #tll { left: calc(10px + var(--sl)); bottom: calc(150px + var(--sb)); width: 44px; height: 44px; font-size: 13px; }
+  #tlr { left: calc(134px + var(--sl)); bottom: calc(150px + var(--sb)); width: 44px; height: 44px; font-size: 13px; }
+  #tp { right: calc(50px + var(--sr)); top: calc(10px + var(--st)); width: 40px; height: 34px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="384" height="216" aria-label="ZERO-G GP game screen"></canvas></div>
+<div id="touch" hidden></div>
+<button id="helpBtn" title="遊び方 (H)" tabindex="-1">?</button>
+<div id="help" hidden>
+  <div class="card">
+    <h2>ZERO-G GP — 遊び方</h2>
+    <p>反重力マシンで超高速サーキットを駆け抜ける、スーパーファミコン時代の疑似3Dレースへのオマージュ作品です。</p>
+    <h3>操作</h3>
+    <table>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>ハンドル</td></tr>
+      <tr><td><kbd>X</kbd> / <kbd>↑</kbd></td><td>アクセル（メニューでは決定）</td></tr>
+      <tr><td><kbd>Z</kbd> / <kbd>↓</kbd></td><td>ブレーキ（メニューでは戻る）</td></tr>
+      <tr><td><kbd>C</kbd> / <kbd>Space</kbd></td><td>ブースト（S マークを消費）</td></tr>
+      <tr><td><kbd>A</kbd> / <kbd>S</kbd></td><td>左 / 右へリーン（曲がる方向に入れると鋭く旋回、単独で横スライド）</td></tr>
+      <tr><td><kbd>Esc</kbd> / <kbd>P</kbd></td><td>ポーズ</td></tr>
+      <tr><td><kbd>M</kbd> / <kbd>F</kbd> / <kbd>H</kbd></td><td>消音 / 全画面 / このヘルプ</td></tr>
+      <tr><td>ゲームパッド</td><td>スティック=ハンドル、A=アクセル、X=ブレーキ、B/Y=ブースト、LB/RB=リーン、START=ポーズ</td></tr>
+      <tr><td>タッチ</td><td>画面のボタンで操作。アクセルは自動（B ボタンでブレーキ）</td></tr>
+    </table>
+    <h3>ルール</h3>
+    <ul>
+      <li>1 レース 5 周。右上の <b>POWER</b> はガードレールや他車との接触で減り、<b>0 の状態でぶつかると大破</b>してリタイア。</li>
+      <li>ピンクの縞模様の <b>ピットエリア</b> を走るとパワーが回復します。</li>
+      <li>2 周目以降、1 周ごとに <b>ブースト（S）</b>を 1 つ獲得（最大 3）。直線で使うのが効果的。</li>
+      <li>黄色の矢印は <b>ダッシュプレート</b>（急加速）、青い縞は <b>ジャンプ台</b>。茶色のラフは減速、水色のアイスは滑る、矢印の風エリアでは横風に流され、黒い <b>地雷</b> は爆発します。</li>
+      <li>スタート直前の「1」が消える瞬間にアクセルを入れるとロケットスタート。</li>
+    </ul>
+    <h3>モード</h3>
+    <ul>
+      <li><b>GRAND PRIX</b>：3 カップ × 3 クラス。各周回の通過順位に制限（15→10→7→5 位以内）があり、ゴールで <b>3 位以内</b>なら次のレースへ。失敗すると予備マシンを 1 台失います。</li>
+      <li><b>FREE RACE</b>：好きなコースで 20 台レース（順位制限なし）。</li>
+      <li><b>TIME ATTACK</b>：単独走行。ベスト記録の走りが<b>ゴースト</b>として残ります。</li>
+    </ul>
+    <button class="close" id="helpClose" tabindex="-1">閉じる (H / Esc)</button>
+  </div>
+</div>
+<script>
+/*@@SCRIPT@@*/
+</script>
+</body>
+</html>

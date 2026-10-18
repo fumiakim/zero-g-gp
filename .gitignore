@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+node_modules/
+# generated previews from dev/*.mjs
+dev/preview/*
+!dev/preview/.gitkeep
