@@ -161,7 +161,8 @@ CARS.buildSheet(key, opts) -> sheet
 - Bank b: roll bankDeg[b]; positive = right side dips (used when steering right).
 - Scale: `pxPerUnit` sprite pixels per world unit. Frames tight but large enough for every
   yaw/bank. The core requests four sheets per design and picks the one whose pitch best matches
-  the real view: near `{pxPerUnit:4, pitchDeg:28}`, mid `{3, 19}`, far `{2, 12}`, farHi `{2, 26}`.
+  the view: near `{pxPerUnit:4, pitchDeg:16}`, mid `{3, 11}`, far `{2, 6}`, farHi `{2, 15}`. Sprites are
+  deliberately drawn from a lower angle than the camera geometry (pitch × 0.56) so machines look flat on the road.
 - Look: SNES-era pre-rendered pixel art — fixed light from upper-left-front (relative to the
   camera, identical for all frames), 3–4 quantised shades per material, glossy canopy
   highlight, 1-px dark outline around the silhouette, dark engine nozzles at the tail (core adds

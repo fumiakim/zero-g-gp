@@ -89,6 +89,10 @@ const RENDER = (() => {
     }
     const zones = T.zones, dash = T.dash, jump = T.jump, grid = T.grid;
     const lane = (hw) => (2 * hw) / 3;
+    // stronger panel contrast than the theme's subtle roadAlt, and dashed lane marks
+    const ext = (a, b, k) => pack(...[0, 8, 16].map((sh) => clamp(((a >>> sh) & 255) + ((((b >>> sh) & 255) - ((a >>> sh) & 255)) * k), 0, 255) | 0));
+    const roadAlt2 = ext(C.road, C.roadAlt, 1.8);
+    const laneDash = mix(C.road, C.roadLine, 0.55);
     for (let o = 0; o < N * N; o++) {
       if (best[o] > 1e11) continue;
       const s = sA[o], d = dA[o];
@@ -100,8 +104,11 @@ const RENDER = (() => {
         const u = d + hw;
         const lw = lane(hw);
         const ps = Math.floor(s / 32), pu = Math.floor(u / lw);
-        let col = (ps + pu) & 1 ? C.roadAlt : C.road;
-        if (s % 32 < 1 || u % lw < 0.9) col = C.roadSeam;
+        let col = (ps + pu) & 1 ? roadAlt2 : C.road;
+        // seams every 16 units and dashed lane dividers: strong cues for the sense of speed
+        if (s % 16 < 1.4 || u % lw < 0.9) col = C.roadSeam;
+        const lu = u % lw;
+        if (u > lw * 0.5 && u < 2 * hw - lw * 0.5 && (lu < 1.8 || lu > lw - 0.2) && s % 24 < 12) col = laneDash;
         if (ad > hw - 6 && ad < hw - 3) col = C.roadLine;
         // start / finish
         if (s < 12) col = (Math.floor(s / 4) + Math.floor(u / 4)) & 1 ? C.startA : C.startB;
@@ -214,7 +221,7 @@ const RENDER = (() => {
       target = car.th + clamp(wrapA(va - car.th), -0.6, 0.6) * 0.35;
     }
     if (snap) cam.th = target;
-    else cam.th = wrapA(cam.th + wrapA(target - cam.th) * Math.min(1, dt * 7));
+    else cam.th = wrapA(cam.th + wrapA(target - cam.th) * Math.min(1, dt * 7 * SIM.PACE));
     cam.x = car.x - Math.cos(cam.th) * CAM_D;
     cam.y = car.y - Math.sin(cam.th) * CAM_D;
     cam.h = CAM_H + Math.max(0, car.z) * 0.55;
@@ -406,7 +413,9 @@ const RENDER = (() => {
         const sh = cars.buildSheet(key, { pxPerUnit: ppu, pitchDeg: pitch, yawSteps: 32, bankDeg: [-18, 0, 18] });
         return { sheet: sh, px: new Uint32Array(sh.pixels.buffer, sh.pixels.byteOffset, sh.width * sh.height) };
       };
-      const near = mk(4, 28), mid = mk(3, 19), far = mk(2, 12), farHi = mk(2, 26);
+      // drawn from a lower angle than the camera geometry (like the SNES classic) so the
+      // machines read as flat and hugging the road instead of pointing nose-up
+      const near = mk(4, 16), mid = mk(3, 11), far = mk(2, 6), farHi = mk(2, 15);
       out[key] = { near, mid, far, farHi, list: [near, mid, far, farHi] };
     }
     return out;
@@ -623,7 +632,9 @@ const RENDER = (() => {
 
   // pick the pre-rendered view whose camera pitch best matches the real one,
   // avoiding heavy down-scaling of big sheets and blocky up-scaling of small ones
-  function pickSheet(S2, sc, pitchDeg) {
+  const ART_PITCH = 0.56; // sprite view pitch = camera pitch to the car x this
+  function pickSheet(S2, sc, geomPitchDeg) {
+    const pitchDeg = geomPitchDeg * ART_PITCH;
     let best = S2.far, bd = 1e9;
     for (const S of S2.list) {
       const ppu = S.sheet.pxPerUnit, k = sc / ppu;

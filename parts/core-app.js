@@ -17,6 +17,7 @@ const APP = (() => {
   function defaults() {
     return {
       v: 1,
+      pace: SIM.PACE,
       settings: { bgm: 0.6, sfx: 0.8, minimap: true, shake: true, difficulty: 'standard', machine: 'comet', course: 'neon', touchAuto: true },
       rec: {}, trophies: {},
     };
@@ -27,8 +28,12 @@ const APP = (() => {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
       if (s && s.v === 1) {
         Object.assign(d.settings, s.settings || {});
-        d.rec = s.rec || {};
         d.trophies = s.trophies || {};
+        if (s.pace === SIM.PACE) d.rec = s.rec || {};
+        else {
+          // times and ghosts from a different game speed are not comparable
+          for (const c of SIM.COURSES) localStorage.removeItem('zerogp.ghost.' + c.id);
+        }
       }
     } catch (e) { /* storage unavailable */ }
     return d;
@@ -46,14 +51,14 @@ const APP = (() => {
       const u8 = new Uint8Array(Int16Array.from(arr).buffer);
       let s = '';
       for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-      localStorage.setItem('zerogp.ghost.' + id, JSON.stringify({ m: machine, t: time, d: btoa(s) }));
+      localStorage.setItem('zerogp.ghost.' + id, JSON.stringify({ m: machine, t: time, p: SIM.PACE, d: btoa(s) }));
       return true;
     } catch (e) { return false; }
   }
   function loadGhost(id) {
     try {
       const g = JSON.parse(localStorage.getItem('zerogp.ghost.' + id) || 'null');
-      if (!g) return null;
+      if (!g || g.p !== SIM.PACE) return null; // recorded at another game speed
       const bin = atob(g.d);
       const u8 = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
@@ -489,6 +494,7 @@ const APP = (() => {
   // per-frame spawn probability p at 60 fps, scaled to the real frame time
   const chance = (p, dt) => Math.random() < 1 - Math.pow(1 - p, dt * 60);
 
+  // particles live in real time while cars move at SIM.PACE, so inherited velocities are scaled
   function ambientFx(run, dt) {
     const race = run.race, fx = run.fx, cam = run.cam;
     for (const c of race.cars) {
@@ -500,7 +506,7 @@ const APP = (() => {
       }
       const fxv = Math.cos(c.th), fyv = Math.sin(c.th);
       if ((c.boostT > 0 || c.dashT > 0) && chance(0.8, dt)) {
-        RENDER.spawn(fx, 'trail', c.x - fxv * 11, c.y - fyv * 11, c.z + 2.5, { speed: 12, vz: 4, life: 0.25, size: 0.6, g: 0, vx: c.vx * 0.3, vy: c.vy * 0.3 });
+        RENDER.spawn(fx, 'trail', c.x - fxv * 11, c.y - fyv * 11, c.z + 2.5, { speed: 12, vz: 4, life: 0.25, size: 0.6, g: 0, vx: c.vx * 0.3 * SIM.PACE, vy: c.vy * 0.3 * SIM.PACE });
       }
       if (c.onRough && c.speed > 70 && chance(0.7, dt)) {
         RENDER.spawn(fx, 'dust', c.x - fxv * 8, c.y - fyv * 8, 1, { speed: 25, vz: 25, life: 0.6, size: 1.6, grow: 2, g: 60 });
@@ -509,14 +515,14 @@ const APP = (() => {
         RENDER.spawn(fx, 'ice', c.x - fxv * 8, c.y - fyv * 8, 1, { speed: 20, vz: 20, life: 0.4, size: 0.8, g: 100 });
       }
       if (c.onPit && c.energy < SIM.ENERGY_MAX && chance(0.8, dt)) {
-        RENDER.spawn(fx, 'pit', c.x + (Math.random() - 0.5) * 16, c.y + (Math.random() - 0.5) * 16, 2, { speed: 6, vz: 40, life: 0.6, size: 0.8, g: -10, vx: c.vx * 0.9, vy: c.vy * 0.9 });
+        RENDER.spawn(fx, 'pit', c.x + (Math.random() - 0.5) * 16, c.y + (Math.random() - 0.5) * 16, 2, { speed: 6, vz: 40, life: 0.6, size: 0.8, g: -10, vx: c.vx * 0.9 * SIM.PACE, vy: c.vy * 0.9 * SIM.PACE });
       }
       if (c.energy < 15 && chance(0.25, dt)) {
-        RENDER.spawn(fx, 'smoke', c.x - fxv * 6, c.y - fyv * 6, 3, { speed: 6, vz: 18, life: 0.9, size: 1.6, grow: 4, g: -5, vx: c.vx * 0.5, vy: c.vy * 0.5 });
+        RENDER.spawn(fx, 'smoke', c.x - fxv * 6, c.y - fyv * 6, 3, { speed: 6, vz: 18, life: 0.9, size: 1.6, grow: 4, g: -5, vx: c.vx * 0.5 * SIM.PACE, vy: c.vy * 0.5 * SIM.PACE });
       }
     }
     RENDER.updateFx(fx, dt);
-    RENDER.updateWeather(fx, run.world.theme.weather, cam, dt, run.follow ? run.follow.speed : 0);
+    RENDER.updateWeather(fx, run.world.theme.weather, cam, dt, run.follow ? run.follow.speed * SIM.PACE : 0);
   }
 
   // advance the simulation with a fixed step; inputFn sets the player input
@@ -558,7 +564,14 @@ const APP = (() => {
     const p = run.follow;
     const dt = dtOverride !== undefined ? dtOverride : frameDt;
     const opts = { dt };
-    if (p && (p.boostT > 0 || p.dashT > 0) && !p.retired) opts.streaks = p.boostT > 0 ? 0.8 : 0.45;
+    if (p && !p.retired) {
+      // speed lines start near top speed and go wild on boost / dash plates
+      const sr = Math.max(0, p.vf) / (p.m.vmax * p.vmul);
+      let st = sr > 0.8 ? (sr - 0.8) * 2.2 : 0;
+      if (p.dashT > 0) st = Math.max(st, 0.5);
+      if (p.boostT > 0) st = 0.85;
+      if (st > 0.02 && dt > 0) opts.streaks = st;
+    }
     const a = run.alpha !== undefined ? run.alpha : 1;
     if (run.ghost && run.race.phase === 'run') {
       const g = SIM.ghostAt(run.ghost.data, Math.max(0, run.race.t - (1 - a) * SIM.DT));
@@ -831,7 +844,7 @@ const APP = (() => {
     const ghostKnown = {};
     const hasGhost = (id) => {
       if (!(id in ghostKnown)) {
-        try { ghostKnown[id] = localStorage.getItem('zerogp.ghost.' + id) !== null; } catch (e) { ghostKnown[id] = false; }
+        ghostKnown[id] = !!loadGhost(id); // decoded once per visit; also rejects other-pace ghosts
       }
       return ghostKnown[id];
     };
@@ -869,7 +882,7 @@ const APP = (() => {
         FD(ctx, `COURSE ${sel + 1}`, 180, 42, { color: '#9fb4d8' });
         FD(ctx, def.name, 180, 54, { scale: 2, color: '#fff', italic: true, shadow: '#000' });
         FD(ctx, theme.name, 180, 74, { color: theme.palette.hudAccent || '#ffd23a' });
-        FD(ctx, `LENGTH ${(T.L * SIM.KMH / 3600).toFixed(2)} km`, 180, 88, { color: '#fff' });
+        FD(ctx, `LENGTH ${((T.L * SIM.KMH) / SIM.PACE / 3600).toFixed(2)} km`, 180, 88, { color: '#fff' });
         const feats = [];
         if (T.dash.length) feats.push('DASH');
         if (T.jump.length) feats.push('JUMP');
@@ -1061,7 +1074,7 @@ const APP = (() => {
           }
         }
         // wrong way
-        if (p.wrongT > 1.2 && !p.finished && !p.retired && ((time * 3) | 0) % 2 === 0 && !run.msgs.some((m) => m.text === 'WRONG WAY')) {
+        if (p.wrongT > 1.2 * SIM.PACE && !p.finished && !p.retired && ((time * 3) | 0) % 2 === 0 && !run.msgs.some((m) => m.text === 'WRONG WAY')) {
           msg(run, 'WRONG WAY', { dur: 0.33, scale: 3, color: '#ff5a5a', y: 84 });
         }
       },

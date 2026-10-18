@@ -28,7 +28,10 @@ const SIM = (() => {
   const CAR_R = 7; // collision radius
   const LAPS = 5;
   const RANK_LIMITS = [15, 10, 7, 5]; // must be at or above this rank when completing laps 1..4
-  const KMH = 1.5; // units/s -> km/h for display
+  // The whole race runs PACE times faster than real time: physics, AI and track
+  // geometry are unchanged (same lines, same balance), only the clock is warped.
+  const PACE = 1.3;
+  const KMH = 1.25 * PACE; // sim units/s -> displayed km/h (real speed)
   const DT = 1 / 120;
   const GRAVITY = 300;
   const ENERGY_MAX = 100;
@@ -1024,7 +1027,7 @@ const SIM = (() => {
       // interpolate the exact line-crossing time inside this tick
       const over = Math.max(0, c.maxRD - c.lapsDone * T.L);
       const along = c.vx * T.tx[c.seg] + c.vy * T.ty[c.seg];
-      const tc = Math.max(c.lapStartT, race.t - Math.min(DT, over / Math.max(1, along)));
+      const tc = Math.max(c.lapStartT, race.t - Math.min(DT, over / Math.max(1, along * PACE)));
       c.lapTimes.push(tc - c.lapStartT);
       c.lapStartT = tc;
       if (c.lapsDone >= race.laps) {
@@ -1094,23 +1097,24 @@ const SIM = (() => {
       }
       return;
     }
-    race.t += dt;
+    race.t += dt; // real seconds (lap times, ghost, countdown)
+    const dp = dt * PACE; // simulated seconds
     for (const c of race.cars) {
       if (c.retired) {
         if (c.boomT >= 0) c.boomT += dt;
         // drift to a halt
-        c.vx *= Math.exp(-dt * 2.5); c.vy *= Math.exp(-dt * 2.5);
-        c.x += c.vx * dt; c.y += c.vy * dt;
+        c.vx *= Math.exp(-dp * 2.5); c.vy *= Math.exp(-dp * 2.5);
+        c.x += c.vx * dp; c.y += c.vy * dp;
         if (c.retired === 'courseout') { c.z -= 60 * dt; }
         continue;
       }
-      if (c.ai && (!c.isPlayer || c.finished || race.opts.mode === 'attract' || race.autopilot)) aiControl(race, c, dt);
-      carPhysics(race, c, dt);
+      if (c.ai && (!c.isPlayer || c.finished || race.opts.mode === 'attract' || race.autopilot)) aiControl(race, c, dp);
+      carPhysics(race, c, dp);
     }
     collideCars(race);
     for (const c of race.cars) {
       if (c.retired) continue;
-      trackInteract(race, c, dt);
+      trackInteract(race, c, dp);
       if (!c.retired) lapLogic(race, c);
     }
     if (race.newFinish.length) {
@@ -1140,7 +1144,7 @@ const SIM = (() => {
       race.rankCheck = 0;
     }
     for (const mn of race.mines) {
-      if (!mn.active) { mn.respawn -= dt; if (mn.respawn <= 0) mn.active = true; }
+      if (!mn.active) { mn.respawn -= dp; if (mn.respawn <= 0) mn.active = true; }
     }
     if ((race.tick & 3) === 0) updateRanks(race);
     // ghost recording (30 Hz)
@@ -1188,7 +1192,7 @@ const SIM = (() => {
 
   return {
     TAU, clamp, lerp, wrapA, rng,
-    MAP, STEP, RAIL_W, CAR_R, LAPS, RANK_LIMITS, KMH, DT, ENERGY_MAX, MAX_BOOSTS,
+    MAP, STEP, RAIL_W, CAR_R, LAPS, RANK_LIMITS, KMH, DT, PACE, ENERGY_MAX, MAX_BOOSTS,
     MACHINES, HERO_KEYS, DRONE, DIFFICULTY, COURSES, CUPS, POINTS, courseById,
     buildTrack, wrapS, sdiff, inS, posAt, locate,
     createRace, step, updateRanks, classify, setupAI, fmtTime, ghostAt, cornerSpeed,
